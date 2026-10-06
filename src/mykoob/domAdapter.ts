@@ -76,7 +76,10 @@ function readUser(source: HTMLElement): UserContext {
   const parts = label.split(',').map(clean);
   const nameRow = [...source.querySelectorAll('table tr')].find(row => {
     const value = clean(row.textContent);
-    return /^[\p{L}]+(?:\s+[\p{L}]+){1,2}$/u.test(value) && !/mykoob|ресурс|новост|действ/i.test(value);
+    // Action rows like "Распечатать план урока" are 2-3 plain words too, so they
+    // must not be mistaken for the student's name (see diary header bug).
+    const actionWords = /mykoob|ресурс|новост|действ|печа|распеча|план|урок|отч[её]т|экспорт|export|print|график|консультац|выписк/i;
+    return /^[\p{L}]+(?:\s+[\p{L}]+){1,2}$/u.test(value) && !actionWords.test(value);
   });
   return {
     label,
@@ -211,12 +214,30 @@ function readActions(source: HTMLElement): Action[] {
 }
 
 function readSelects(source: HTMLElement): SourceSelect[] {
-  return [...source.querySelectorAll<HTMLSelectElement>('select')].map((element, index) => ({
-    label: clean(element.getAttribute('aria-label') || element.previousElementSibling?.textContent) || `Выбор ${index + 1}`,
-    element,
-    options: [...element.options].map(option => ({ label: clean(option.textContent), value: option.value })),
-    value: element.value,
-  })).filter(select => select.options.length > 1);
+  // Closed sub-blocks (e.g. a collapsed print dialog) must not leak their
+  // controls into the toolbar. Note: `source` itself is hidden, so only
+  // ancestors below it are checked.
+  const isHiddenBelowSource = (element: HTMLElement) => {
+    for (let node = element.parentElement; node && node !== source; node = node.parentElement) {
+      if (node.hidden || node.style.display === 'none') return true;
+    }
+    return false;
+  };
+  const seen = new Set<string>();
+  const selects: SourceSelect[] = [];
+  [...source.querySelectorAll<HTMLSelectElement>('select')].forEach(element => {
+    if (isHiddenBelowSource(element)) return;
+    const options = [...element.options].map(option => ({ label: clean(option.textContent), value: option.value }));
+    if (options.length < 2) return;
+    const label = clean(element.getAttribute('aria-label') || element.previousElementSibling?.textContent) || `Выбор ${selects.length + 1}`;
+    // Mykoob appends a fresh copy of print dialogs on every repeated click.
+    // Show each unique form once instead of flooding the toolbar.
+    const fingerprint = `${label}::${options.map(option => `${option.label}=${option.value}`).join('|')}`;
+    if (seen.has(fingerprint)) return;
+    seen.add(fingerprint);
+    selects.push({ label, element, options, value: element.value });
+  });
+  return selects;
 }
 
 function readActivity(source: HTMLElement): ActivityEntry[] {
