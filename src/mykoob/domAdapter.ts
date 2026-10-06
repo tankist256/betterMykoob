@@ -275,9 +275,14 @@ export class DomMykoobAdapter implements MykoobAdapter {
       files: 'Файлы', statistics: 'Статистика', notifications: 'Уведомления', report: 'Выписка оценок', other: 'Mykoob',
     };
     return {
-      page, title: pageNames[page], user: readUser(this.source), nav, actions: readActions(this.source),
-      selects: readSelects(this.source), diary: readDiary(this.source), grades: readGrades(this.source), gradeFilters: readGradeFilters(this.source),
-      dateControl: readDateControl(this.source), activity: page === 'home' ? readActivity(this.source) : [],
+      page, title: pageNames[page], user: readUser(this.source), nav,
+      actions: page === 'diary' || page === 'grades' ? readActions(this.source) : [],
+      selects: page === 'diary' || page === 'grades' ? readSelects(this.source) : [],
+      diary: page === 'diary' ? readDiary(this.source) : [],
+      grades: page === 'grades' ? readGrades(this.source) : null,
+      gradeFilters: page === 'grades' ? readGradeFilters(this.source) : { quick: [], types: [] },
+      dateControl: page === 'diary' ? readDateControl(this.source) : null,
+      activity: page === 'home' ? readActivity(this.source) : [],
       homeResources: page === 'home' ? readHomeResources(this.source) : [], profileImage: page === 'home' ? readProfileImage(this.source) : undefined,
       original: this.source,
     };

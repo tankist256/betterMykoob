@@ -48,10 +48,11 @@ if (!document.getElementById('bettermykoob-root') && document.body) {
   const adapter = new DomMykoobAdapter(source);
   source.hidden = true;
   const root = createRoot(mount);
+  const hasAssignmentDialogs = /lessonsplan|homework|task/i.test(window.location.search);
   let scheduled = false;
   const render = () => {
     scheduled = false;
-    moveAssignmentDialog();
+    if (hasAssignmentDialogs) moveAssignmentDialog();
     root.render(<React.StrictMode><App snapshot={adapter.read()} adapter={adapter} /></React.StrictMode>);
   };
   const observer = new MutationObserver(() => {
