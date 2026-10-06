@@ -14,7 +14,7 @@ if (JSON.stringify(manifest) !== JSON.stringify(sourceManifest)) {
   throw new Error('dist/manifest.json is stale; run npm run build first');
 }
 
-const required = ['manifest.json', ...manifest.content_scripts.flatMap(({ js = [], css = [] }) => [...js, ...css])];
+const required = ['manifest.json', ...Object.values(manifest.icons ?? {}), ...manifest.content_scripts.flatMap(({ js = [], css = [] }) => [...js, ...css])];
 for (const file of required) {
   if (!existsSync(join(dist, file))) throw new Error(`Required extension file is missing: ${file}`);
 }
