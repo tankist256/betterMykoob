@@ -211,6 +211,15 @@ function GradesPage({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: 
   </>;
 }
 
+function renderRichText(text: string) {
+  // Activity entries contain raw URLs (youtube, drive, uzdevumi). Render them as links.
+  return text.split(/(https?:\/\/\S+)/g).map((part, index) =>
+    /^https?:\/\/\S+$/.test(part)
+      ? <a key={index} href={part} target="_blank" rel="noreferrer">{part}</a>
+      : <span key={index}>{part}</span>,
+  );
+}
+
 function HomePage({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: MykoobAdapter }) {
   const [schedule, setSchedule] = useState<DiaryDay[]>([]);
   useEffect(() => { let active = true; adapter.getSchedule().then(days => { if (active) setSchedule(days); }).catch(() => { if (active) setSchedule([]); }); return () => { active = false; }; }, [adapter]);
@@ -231,7 +240,7 @@ function HomePage({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: My
       const grade = /оценк|результат|grade/i.test(item.title);
       const absence = /пропуск|attendance|kavēj/i.test(item.title);
       const Icon = grade ? BookOpen : absence ? CircleAlert : ClipboardList;
-      return <article className="bm-activity-item" key={`${group}-${index}`}><span className={`bm-activity-icon ${absence ? 'bm-activity-warning' : grade ? 'bm-activity-success' : ''}`}><Icon size={16} /></span><div><p>{item.title}</p><time>{item.detail}</time></div></article>;
+      return <article className="bm-activity-item" key={`${group}-${index}`}><span className={`bm-activity-icon ${absence ? 'bm-activity-warning' : grade ? 'bm-activity-success' : ''}`}><Icon size={16} /></span><div><p>{renderRichText(item.title)}</p><time>{item.detail}</time></div></article>;
     })}</section>)}
   </div>{(upcoming.length > 0 || homework.length > 0) && <aside className="bm-home-context">
     {upcoming.length > 0 && <section><h2><Clock3 size={16} />Ближайшие уроки</h2>{upcoming.map(({ day, lesson }, index) => <div className="bm-context-row" key={`${day}-${index}`}><span>{day} · {lesson.time}</span><strong>{lesson.subject}</strong><small>{lesson.room}</small></div>)}</section>}
@@ -241,10 +250,31 @@ function HomePage({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: My
 
 function EmptyState({ title, text }: { title: string; text: string }) { return <div className="bm-empty"><Search size={24} /><h2>{title}</h2><p>{text}</p></div>; }
 
+function CopyPageHtml({ snapshot }: { snapshot: MykoobSnapshot }) {
+  // One-click export of the live Mykoob DOM. Needed to build pure new UIs for
+  // pages the parser does not understand yet (grades, absences, statistics).
+  const [state, setState] = useState<'idle' | 'done' | 'failed'>('idle');
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(snapshot.original.outerHTML);
+      setState('done');
+    } catch {
+      setState('failed');
+    }
+    window.setTimeout(() => setState('idle'), 2500);
+  };
+  return <div className="bm-debug-row">
+    <button className="bm-button bm-button-secondary" onClick={copy}>
+      {state === 'done' ? 'Скопировано!' : state === 'failed' ? 'Не удалось скопировать' : 'Скопировать HTML страницы'}
+    </button>
+    <span>Помогает делать новые разделы. Удалите личные данные перед отправкой.</span>
+  </div>;
+}
+
 function OriginalPage({ snapshot }: { snapshot: MykoobSnapshot }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { if (ref.current && snapshot.original.parentElement !== ref.current) ref.current.appendChild(snapshot.original); snapshot.original.hidden = false; }, [snapshot.original]);
-  return <section className="bm-original-card"><div className="bm-original-heading"><h2>{snapshot.title}</h2><span>Данные Mykoob</span></div><div className="bm-original-content" ref={ref} /></section>;
+  return <section className="bm-original-card"><div className="bm-original-heading"><h2>{snapshot.title}</h2><span>Данные Mykoob</span></div><CopyPageHtml snapshot={snapshot} /><div className="bm-original-content" ref={ref} /></section>;
 }
 
 function SourcePanel({ snapshot }: { snapshot: MykoobSnapshot }) {
@@ -253,7 +283,7 @@ function SourcePanel({ snapshot }: { snapshot: MykoobSnapshot }) {
     if (ref.current && snapshot.original.parentElement !== ref.current) ref.current.appendChild(snapshot.original);
     snapshot.original.hidden = !ref.current?.closest('details')?.open;
   }, [snapshot.original]);
-  return <details className="bm-source-panel" onToggle={event => { snapshot.original.hidden = !event.currentTarget.open; }}><summary>Дополнительные действия Mykoob</summary><div className="bm-original-content" ref={ref} /></details>;
+  return <details className="bm-source-panel" onToggle={event => { snapshot.original.hidden = !event.currentTarget.open; }}><summary>Дополнительные действия Mykoob</summary><CopyPageHtml snapshot={snapshot} /><div className="bm-original-content" ref={ref} /></details>;
 }
 
 function Header({ snapshot, nav, onMenu }: { snapshot: MykoobSnapshot; nav: NavigationItem[]; onMenu: () => void }) {
