@@ -4,7 +4,10 @@ import { App } from '../components/App';
 import { DomMykoobAdapter } from '../mykoob/domAdapter';
 import './style.css';
 
-if (!document.getElementById('bettermykoob-root') && document.body) {
+const bootFlag = window as unknown as { __bettermykoobBooted?: boolean };
+// Mykoob rearranges the document on AJAX navigation. Boot exactly once per page.
+if (!bootFlag.__bettermykoobBooted && !document.getElementById('bettermykoob-root') && document.body) {
+  bootFlag.__bettermykoobBooted = true;
   const source = document.createElement('div');
   source.id = 'bettermykoob-original';
   while (document.body.firstChild) source.appendChild(document.body.firstChild);

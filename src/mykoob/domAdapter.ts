@@ -1,13 +1,14 @@
-import type { Action, ActivityEntry, DiaryDay, GradeFilters, GradeTable, HomeResource, Lesson, MykoobAdapter, MykoobSnapshot, NavigationItem, Page, SourceSelect, UserContext } from './models';
+import type { AbsenceEntry, AbsenceTable, Action, ActivityEntry, DiaryDay, GradeFilters, GradeTable, HomeResource, Lesson, MykoobAdapter, MykoobSnapshot, NavigationItem, NotificationData, Page, SourceSelect, UserContext } from './models';
 
 const clean = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim();
+// Mykoob glues counters to labels without a space ("Задания38", "Файлы225").
 const pageTerms: Array<[Page, RegExp]> = [
   ['home', /^(домой|home|sākums)$/i],
   ['diary', /^(дневник|diary|dienasgrāmata)$/i],
   ['grades', /^(оценки|grades|atzīmes)$/i],
   ['absences', /^(пропуски|absences|kavējumi)$/i],
-  ['homework', /^(задания|homework|uzdevumi)(\s+\d+)?$/i],
-  ['files', /^(файлы|files|faili)(\s+\d+)?$/i],
+  ['homework', /^(задания|homework|uzdevumi)(\s*\d+)?$/i],
+  ['files', /^(файлы|files|faili)(\s*\d+)?$/i],
   ['statistics', /^(статистика|statistics|statistika)$/i],
   ['notifications', /^(уведомления|notifications|paziņojumi)$/i],
   ['report', /^(выписка оценок|grade report|sekmju izraksts)$/i],
@@ -56,8 +57,15 @@ function readNavigation(source: HTMLElement): NavigationItem[] {
     const label = clean(link.textContent);
     const match = pageTerms.find(([, pattern]) => pattern.test(label));
     if (!match || items.some(item => item.page === match[0])) return;
-    const count = label.match(/\b\d+$/)?.[0];
-    items.push({ page: match[0], label: label.replace(/\s+\d+$/, ''), href: link.href, count, source: link });
+    const count = label.match(/(\d+)$/)?.[1];
+    let href = link.href;
+    let origin: HTMLAnchorElement | undefined = link;
+    if (!href || href.startsWith('javascript:')) {
+      // Dropdown tabs (e.g. "Задания") use a void link. Follow their first real subtab instead.
+      const sub = link.closest('li')?.querySelector<HTMLAnchorElement>('a[href]:not([href^="javascript"])');
+      if (sub && sub !== link) { href = sub.href; origin = undefined; }
+    }
+    items.push({ page: match[0], label: label.replace(/\s*\d+$/, ''), href, count, source: origin });
   });
   return items;
 }
@@ -74,6 +82,9 @@ function readUser(source: HTMLElement): UserContext {
   const titleContext = document.title.match(/\[([^\]]*mācību gads)\]/)?.[1] ?? '';
   const label = clean(context?.textContent || titleContext);
   const parts = label.split(',').map(clean);
+  // The logout control carries the real name: `Выход Marks Berjozins (mail@...)`.
+  const logoutTitle = source.querySelector('.header-opt-logout')?.getAttribute('title') ?? '';
+  const logoutName = clean(logoutTitle.replace(/^(выход|logout|iziet)\s+/i, '').replace(/\s*\([^)]*\)\s*$/, ''));
   const nameRow = [...source.querySelectorAll('table tr')].find(row => {
     const value = clean(row.textContent);
     // Action rows like "Распечатать план урока" are 2-3 plain words too, so they
@@ -83,10 +94,32 @@ function readUser(source: HTMLElement): UserContext {
   });
   return {
     label,
-    name: clean(nameRow?.textContent || source.querySelector('[title*="рофил"], [aria-label*="рофил"]')?.textContent),
+    name: logoutName || clean(nameRow?.textContent || source.querySelector('[title*="рофил"], [aria-label*="рофил"]')?.textContent),
     group: parts.length >= 3 ? parts[1] : label.match(/([^,]+\s+grupa)/)?.[1]?.trim() ?? '',
     academicYear: label.match(/\d{4}\.\s*\/\s*\d{4}\./)?.[0] ?? '',
   };
+}
+
+// Legend from #attendance_legend: Mykoob marks attendance with icon-only buttons.
+const attendanceClassLabels: Array<[string, string]> = [
+  ['uncheck', 'Посещено'],
+  ['delete3', 'Опоздание'],
+  ['delete4', 'Ушёл раньше'],
+  ['delete2', 'Оправданный'],
+  ['delete', 'Непосещено'],
+  ['blank_gray', 'Несохранено'],
+];
+
+function readAttendanceValue(cell: HTMLElement | undefined): string {
+  const tokens = cell?.querySelector('button')?.className.split(/\s+/) ?? [];
+  return attendanceClassLabels.find(([token]) => tokens.includes(token))?.[1] ?? '';
+}
+
+function readHomework(cell: HTMLElement | undefined): string {
+  if (!cell) return '';
+  const titles = [...cell.querySelectorAll('.assignment_title')].map(element => clean(element.textContent)).filter(Boolean);
+  if (titles.length) return titles.join(', ');
+  return clean(cell.textContent).replace(/^\*\s*/, '');
 }
 
 function readDiary(source: HTMLElement): DiaryDay[] {
@@ -103,7 +136,8 @@ function readDiary(source: HTMLElement): DiaryDay[] {
       if (cells.length < 7 || !/^\d+\.?$/.test(cells[0]) || !/\d{2}:\d{2}/.test(cells[1])) return;
       lessons.push({
         number: cells[0], time: cells[1], ...splitSubject(cells[2]), grade: readGradeValues(cellElements[3]),
-        attendance: cells[4] || accessibleCellLabel(cellElements[4]), homework: cells[5] ?? '', topic: cells[6] ?? '',
+        attendance: readAttendanceValue(cellElements[4]) || cells[4] || accessibleCellLabel(cellElements[4]),
+        homework: readHomework(cellElements[5]), topic: cells[6] ?? '',
         feedback: cells[7] || accessibleCellLabel(cellElements[7]), feedbackAction: Boolean(cellElements[7]?.children.length), sourceRow: row,
       });
     });
@@ -154,10 +188,16 @@ function readGradeValues(cell: HTMLElement): string {
 }
 
 function readGrades(source: HTMLElement): GradeTable | null {
-  const candidates = [...source.querySelectorAll<HTMLTableElement>('table')];
   const monthPattern = /сентябр|октябр|ноябр|декабр|январ|феврал|март|апрел|ма[йя]|июн|septembr|oktobr|novembr|decembr|janvār|februār|mart|aprīl|maij|jūnij/i;
-  const monthTable = candidates.find(candidate => !candidate.querySelector('table') && monthPattern.test(clean(candidate.querySelector('tr')?.textContent)) && [...candidate.querySelectorAll('tr')].length > 1);
-  if (!monthTable) return null;
+  const isMonthTable = (candidate: HTMLTableElement) => !candidate.querySelector('table') && monthPattern.test(clean(candidate.querySelector('tr')?.textContent)) && [...candidate.querySelectorAll('tr')].length > 1;
+  // Work-type tabs hide inactive panels with .hide instead of reordering the DOM.
+  const visibleFirst = (tables: HTMLTableElement[]) => [...tables].sort((a, b) => Number(Boolean(a.closest('.hide'))) - Number(Boolean(b.closest('.hide'))));
+  const scope = source.querySelector('#gradesContent');
+  const scoped = scope ? visibleFirst([...scope.querySelectorAll<HTMLTableElement>('table')]) : [];
+  const monthTable = scoped.find(isMonthTable)
+    // Fallback to the whole page for layouts without #gradesContent.
+    ?? visibleFirst([...source.querySelectorAll<HTMLTableElement>('table')]).find(isMonthTable);
+  if (!monthTable) return readGradesContentFallback(source);
   const firstMonthRow = monthTable.querySelector('tr');
   const months = firstMonthRow ? [...firstMonthRow.children].map(cell => clean(cell.textContent)) : [];
   const containingRow = monthTable.closest('tr');
@@ -185,26 +225,116 @@ function readGrades(source: HTMLElement): GradeTable | null {
     const cells = [...row.querySelectorAll<HTMLElement>('td,th')];
     return { subject: clean(cells[0]?.textContent), values: cells.slice(1).map(readGradeValues), sourceCells: cells.slice(1) };
   }).filter(row => row.subject);
-  return rows.length ? { headings, rows } : null;
+  if (rows.length) return { headings, rows };
+  return readGradesContentFallback(source);
+}
+
+// Tables on period pages nest (summary cells hold inner tables), so plain
+// querySelectorAll('tr') mixes outer and inner rows. Keep only direct rows.
+function directTableRows(root: Element | null, selector: string): HTMLTableRowElement[] {
+  const table = root?.querySelector<HTMLTableElement>(selector);
+  if (!table) return [];
+  return [...table.querySelectorAll<HTMLTableRowElement>('tr')].filter(row => row.closest('table') === table);
+}
+
+// Second attempt for the real #gradesContent layout (subject table + month data
+// table side by side, as seen on period pages). Used when the month-table search fails.
+function readGradesContentFallback(source: HTMLElement): GradeTable | null {
+  const content = source.querySelector('#gradesContent');
+  if (!content) return null;
+  const subjectRows = directTableRows(content, '.period_subject_div table').slice(1);
+  const dataRows = directTableRows(content, '.period_data_div table');
+  if (!subjectRows.length || !dataRows.length) return null;
+  const months = [...dataRows[0].children].map(cell => clean(cell.textContent)).filter(Boolean);
+  if (!months.length) return null;
+  const rows = subjectRows.map((row, index) => {
+    const cells = [...row.querySelectorAll<HTMLElement>('td,th')];
+    const dataCells = dataRows[index + 1] ? [...dataRows[index + 1].children] as HTMLElement[] : [];
+    return {
+      subject: clean(cells.at(-1)?.textContent),
+      values: dataCells.map(readGradeValues),
+      sourceCells: dataCells,
+    };
+  }).filter(row => row.subject);
+  return rows.length ? { headings: ['Предмет', ...months], rows } : null;
+}
+
+const summaryHeadingNames: Record<string, string> = {
+  'Урок': 'Уроки',
+  'Отсу': 'Отсутствует',
+  'Опра': 'Оправдано',
+  'Опоз': 'Опоздания',
+  'Ушёл': 'Ушёл раньше',
+};
+
+// Parser for the real attendance layout: subject table + month data table with
+// status buttons + summary table, all inside #gradesContent.attendance_page.
+function readAbsences(source: HTMLElement): AbsenceTable | null {
+  const content = source.querySelector('#gradesContent.attendance_page');
+  if (!content) return null;
+  const subjectRows = directTableRows(content, '.period_subject_div table').slice(1);
+  const dataRows = directTableRows(content, '.period_data_div table');
+  const summaryRows = directTableRows(content, '.period_summary_table');
+  if (!subjectRows.length || dataRows.length < 2) return null;
+  const months = [...dataRows[0].children].map(cell => clean(cell.textContent)).filter(Boolean);
+  const summaryHeadings = summaryRows.length
+    ? [...summaryRows[0].querySelectorAll('a')].map(link => summaryHeadingNames[clean(link.textContent)] ?? clean(link.textContent)).filter(Boolean)
+    : [];
+  const rows = subjectRows.map((row, index) => {
+    const subjectCells = [...row.querySelectorAll<HTMLElement>('td,th')];
+    const dataCells = dataRows[index + 1] ? [...dataRows[index + 1].children] : [];
+    const entries = dataCells.map(cell => [...cell.querySelectorAll('button')].map(button => {
+      const tokens = button.className.split(/\s+/);
+      const status = attendanceClassLabels.find(([token]) => tokens.includes(token))?.[1] ?? 'Отметка';
+      const title = clean(button.getAttribute('title'));
+      const date = title.match(/Дата:\s*([\d.]+\s*[\d:]*)/)?.[1]?.trim() ?? '';
+      return { status, date, title };
+    }));
+    const summaryTable = summaryRows[index + 1]?.querySelector('table');
+    const summary = summaryTable ? [...summaryTable.querySelectorAll('td')].map(cell => clean(cell.textContent)) : [];
+    return {
+      subject: clean(subjectCells.at(-1)?.textContent),
+      entries,
+      summary,
+    };
+  }).filter(row => row.subject);
+  return rows.length ? { months, summaryHeadings, rows } : null;
 }
 
 function readGradeFilters(source: HTMLElement): GradeFilters {
   const dateInputs = [...source.querySelectorAll<HTMLInputElement>('input')].filter(input => /^\d{2}\.\d{2}\.\d{4}$/.test(input.value));
   const findTextControl = (label: string) => {
-    const leaf = [...source.querySelectorAll<HTMLElement>('a,button,span,div,li,td')].find(element => clean(element.textContent) === label && element.children.length < 2);
+    // Prefer true leaves: a wrapping <td> also carries the label text, but only
+    // the inner control (or its own text node) routes clicks to the real handler.
+    const matches = [...source.querySelectorAll<HTMLElement>('a,button,span,div,li,td')].filter(element => clean(element.textContent) === label);
+    const leaf = matches.find(element => element.children.length === 0) ?? matches.find(element => element.children.length < 2);
     return leaf?.closest<HTMLElement>('a,button,[role="button"]') || leaf;
   };
   const make = (label: string) => {
     const element = findTextControl(label);
-    return element ? { label, element, active: /active|selected|current/i.test(`${element.className} ${element.parentElement?.className}`) || element.getAttribute('aria-selected') === 'true' } : null;
+    // The selected control is marked on itself, its parent, or the wrapping <li>
+    // (grade type tabs use li.active, the period uses .strong).
+    const context = `${element?.className} ${element?.parentElement?.className} ${element?.closest('li')?.className ?? ''}`;
+    return element ? { label, element, active: /active|selected|current|sel2|\bstrong\b/i.test(context) || element.getAttribute('aria-selected') === 'true' } : null;
   };
   const quick = ['Сегодня', 'Вчера', '1.sem.', '2.sem.'].map(make).filter((value): value is NonNullable<typeof value> => Boolean(value));
   const types = ['Все оценки', 'Diagnosticējošais darbs', 'Mājas darbs', 'Nodarbība', 'Patstāvīgais darbs', 'Pārbaudes darbs'].map(make).filter((value): value is NonNullable<typeof value> => Boolean(value));
-  return { startDate: dateInputs[0], endDate: dateInputs[1], apply: findTextControl('Утвердить'), quick, types };
+  const search = source.querySelector<HTMLInputElement>('#filter_search_value') ?? undefined;
+  return { startDate: dateInputs[0], endDate: dateInputs[1], apply: findTextControl('Утвердить'), quick, types, search, searchTypes: readSearchTypes(source) };
+}
+
+// Search-field selector on the notifications page (Все поля, Имя ученика, ...).
+// Clicking an <li> fires its inline setFilterType handler, even when the balloon is hidden.
+function readSearchTypes(source: HTMLElement): GradeFilters['searchTypes'] {
+  return [...source.querySelectorAll('.filter_list li')].map(element => ({
+    label: clean(element.textContent),
+    element: element as unknown as HTMLElement,
+    active: /sel2/.test(element.className),
+  })).filter(control => control.label);
 }
 
 function readActions(source: HTMLElement): Action[] {
-  const names = /печать|print|консультац|consult|экспорт|export|отчёт|report|период|семестр|semester/i;
+  const names = /печат|print|консультац|consult|экспорт|export|отчёт|report|период|семестр|semester/i;
   const actions: Action[] = [];
   source.querySelectorAll<HTMLElement>('button,a,[role="button"]').forEach(element => {
     const label = clean(element.textContent || element.getAttribute('title') || element.getAttribute('aria-label'));
@@ -226,10 +356,17 @@ function readSelects(source: HTMLElement): SourceSelect[] {
   const seen = new Set<string>();
   const selects: SourceSelect[] = [];
   [...source.querySelectorAll<HTMLSelectElement>('select')].forEach(element => {
+    // Dialogs (profile settings, print windows, cookie panels) carry their own
+    // controls. They must not flood the page toolbar.
+    if (element.hidden || element.style.display === 'none') return;
+    if (element.closest('.mykoob-dialog,.ui-dialog,.dialog,[role="dialog"],#Print_Dialog,#cc--main')) return;
     if (isHiddenBelowSource(element)) return;
     const options = [...element.options].map(option => ({ label: clean(option.textContent), value: option.value }));
     if (options.length < 2) return;
-    const label = clean(element.getAttribute('aria-label') || element.previousElementSibling?.textContent) || `Выбор ${selects.length + 1}`;
+    // Class/subject dropdowns have no text label; their wrapper ids name them.
+    const contextId = element.closest('[id*="subject"]')?.id ?? element.closest('[id*="class"]')?.id ?? '';
+    const contextLabel = /subject/i.test(contextId) ? 'Предмет' : /class/i.test(contextId) ? 'Класс' : '';
+    const label = clean(element.getAttribute('aria-label') || element.previousElementSibling?.textContent) || contextLabel || `Выбор ${selects.length + 1}`;
     // Mykoob appends a fresh copy of print dialogs on every repeated click.
     // Show each unique form once instead of flooding the toolbar.
     const fingerprint = `${label}::${options.map(option => `${option.label}=${option.value}`).join('|')}`;
@@ -285,6 +422,34 @@ function readProfileImage(source: HTMLElement): string | undefined {
   return image?.src;
 }
 
+function readEmbeddedFrame(source: HTMLElement): HTMLIFrameElement | null {
+  // The statistics page is a single analytics iframe. Reuse the live node so it keeps its state.
+  return source.querySelector<HTMLIFrameElement>('#main iframe[src*="analytics"]');
+}
+
+// Parser for the real notifications layout (#G_data_display): either an explicit
+// empty marker or a plain data table of unknown columns, rendered generically.
+function readNotifications(source: HTMLElement): NotificationData | null {
+  const display = source.querySelector('#G_data_display');
+  if (!display) return null;
+  if (display.querySelector('.empty-content') || /не найдены примечания/i.test(display.textContent ?? '')) {
+    return { empty: true, table: null };
+  }
+  const tables = [...display.querySelectorAll('table')].filter(table => !table.querySelector('table'));
+  const candidates = tables.map(table => ({
+    rows: [...table.querySelectorAll('tr')].filter(row => row.closest('table') === table),
+  })).filter(candidate => candidate.rows.length >= 2);
+  candidates.sort((a, b) => b.rows.length - a.rows.length);
+  const best = candidates[0];
+  if (!best) return null;
+  const cellText = (row: HTMLTableRowElement) =>
+    [...row.children].filter(cell => cell.tagName === 'TD' || cell.tagName === 'TH').map(cell => clean(cell.textContent));
+  const headings = cellText(best.rows[0]);
+  const rows = best.rows.slice(1).map(cellText).filter(cells => cells.some(Boolean));
+  if (!rows.length) return null;
+  return { empty: false, table: { headings, rows } };
+}
+
 export class DomMykoobAdapter implements MykoobAdapter {
   constructor(private source: HTMLElement) {}
 
@@ -295,16 +460,25 @@ export class DomMykoobAdapter implements MykoobAdapter {
       home: 'Главная', diary: 'Дневник', grades: 'Оценки', absences: 'Пропуски', homework: 'Задания',
       files: 'Файлы', statistics: 'Статистика', notifications: 'Уведомления', report: 'Выписка оценок', other: 'Mykoob',
     };
+    const grades = page === 'grades' ? readGrades(this.source) : null;
+    // An explicitly empty period is real data, not a parse failure.
+    const gradesEmpty = page === 'grades' && !grades && (
+      /нет уроков с выставленными оценками/i.test(this.source.textContent ?? '') ||
+      Boolean(this.source.querySelector('#gradesContent #empty_data_container'))
+    );
     return {
       page, title: pageNames[page], user: readUser(this.source), nav,
-      actions: page === 'diary' || page === 'grades' ? readActions(this.source) : [],
-      selects: page === 'diary' || page === 'grades' ? readSelects(this.source) : [],
+      actions: page === 'diary' || page === 'grades' || page === 'absences' || page === 'notifications' ? readActions(this.source) : [],
+      selects: page === 'diary' || page === 'grades' || page === 'absences' || page === 'notifications' ? readSelects(this.source) : [],
       diary: page === 'diary' ? readDiary(this.source) : [],
-      grades: page === 'grades' ? readGrades(this.source) : null,
-      gradeFilters: page === 'grades' ? readGradeFilters(this.source) : { quick: [], types: [] },
+      grades, gradesEmpty,
+      absences: page === 'absences' ? readAbsences(this.source) : null,
+      notifications: page === 'notifications' ? readNotifications(this.source) : null,
+      gradeFilters: page === 'grades' || page === 'absences' || page === 'notifications' ? readGradeFilters(this.source) : { quick: [], types: [], searchTypes: [] },
       dateControl: page === 'diary' ? readDateControl(this.source) : null,
       activity: page === 'home' ? readActivity(this.source) : [],
       homeResources: page === 'home' ? readHomeResources(this.source) : [], profileImage: page === 'home' ? readProfileImage(this.source) : undefined,
+      embeddedFrame: page === 'statistics' ? readEmbeddedFrame(this.source) : null,
       original: this.source,
     };
   }

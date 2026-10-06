@@ -30,6 +30,11 @@ export interface Lesson {
 export interface DiaryDay { date: string; lessons: Lesson[]; }
 export interface GradeRow { subject: string; values: string[]; sourceCells: HTMLElement[]; }
 export interface GradeTable { headings: string[]; rows: GradeRow[]; }
+export interface AbsenceEntry { status: string; date: string; title: string; }
+export interface AbsenceRow { subject: string; entries: AbsenceEntry[][]; summary: string[]; }
+export interface AbsenceTable { months: string[]; summaryHeadings: string[]; rows: AbsenceRow[]; }
+export interface NotificationTable { headings: string[]; rows: string[][]; }
+export interface NotificationData { empty: boolean; table: NotificationTable | null; }
 export interface GradeFilterControl { label: string; element: HTMLElement; active: boolean; }
 export interface GradeFilters {
   startDate?: HTMLInputElement;
@@ -37,6 +42,8 @@ export interface GradeFilters {
   apply?: HTMLElement;
   quick: GradeFilterControl[];
   types: GradeFilterControl[];
+  search?: HTMLInputElement;
+  searchTypes: GradeFilterControl[];
 }
 export interface ActivityEntry { title: string; detail: string; group: string; source: HTMLElement; }
 export interface HomeResource { label: string; source: HTMLElement; }
@@ -50,11 +57,15 @@ export interface MykoobSnapshot {
   selects: SourceSelect[];
   diary: DiaryDay[];
   grades: GradeTable | null;
+  gradesEmpty: boolean;
+  absences: AbsenceTable | null;
+  notifications: NotificationData | null;
   gradeFilters: GradeFilters;
   dateControl: { label: string; previous?: HTMLElement; next?: HTMLElement } | null;
   activity: ActivityEntry[];
   homeResources: HomeResource[];
   profileImage?: string;
+  embeddedFrame: HTMLIFrameElement | null;
   original: HTMLElement;
 }
 
