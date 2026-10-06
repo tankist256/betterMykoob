@@ -55,7 +55,6 @@ The [release workflow](.github/workflows/release.yml) checks that the tag matche
 - `manifest.json`: Manifest V3 permissions and supported Mykoob domain.
 - `src/mykoob/`: DOM parsing and normalized Mykoob models.
 - `src/components/`: React presentation layer for Home, Diary and Grades.
-- `src/browser/`: browser API abstraction.
 - `src/content/`: content script and responsive styles.
 - `scripts/`: version validation, manifest copy and release packaging.
 - `public/`: static assets copied into the production build.

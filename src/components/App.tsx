@@ -23,6 +23,10 @@ const fallbackNav: NavigationItem[] = [
   { page: 'report', label: 'Выписка оценок', href: 'https://family.mykoob.lv/?reportperiod' },
 ];
 
+// Column positions in the original Mykoob diary table. Keep in sync with readDiary().
+const GRADE_CELL_INDEX = 3;
+const FEEDBACK_CELL_INDEX = 7;
+
 function activateNav(item: NavigationItem) {
   if (item.source) { if (item.href.startsWith('javascript:')) revealSource(); item.source.click(); return; }
   if (item.href && !item.href.startsWith('javascript:')) window.location.assign(item.href);
@@ -53,7 +57,7 @@ function SelectControl({ select, adapter }: { select: SourceSelect; adapter: Myk
 
 function PageActions({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: MykoobAdapter }) {
   return <div className="bm-page-actions">
-    {snapshot.selects.map((select, index) => <SelectControl key={index} select={select} adapter={adapter} />)}
+    {snapshot.selects.map(select => <SelectControl key={select.label} select={select} adapter={adapter} />)}
     {snapshot.actions.filter(action => !/выписка оценок/i.test(action.label)).map((action, index) =>
       <button className="bm-button bm-button-secondary" key={`${action.label}-${index}`} onClick={() => { revealSource(); adapter.activate(action); }}>
         <ActionIcon label={action.label} /><span>{action.label}</span>
@@ -119,18 +123,18 @@ function LessonRow({ lesson }: { lesson: Lesson }) {
       <td className="bm-subject"><strong>{lesson.subject || '—'}</strong><span className="bm-table-sub">{lesson.teacher}</span></td>
       <td className="bm-room">{lesson.room || '—'}</td>
       <td className="bm-teacher">{lesson.teacher || '—'}</td>
-      <td><GradeChip value={lesson.grade} onClick={lesson.grade ? () => sourceCellClick(lesson.sourceRow, 3) : undefined} /></td>
+      <td><GradeChip value={lesson.grade} onClick={lesson.grade ? () => sourceCellClick(lesson.sourceRow, GRADE_CELL_INDEX) : undefined} /></td>
       <td><AttendanceState value={lesson.attendance} /></td>
       <td><HomeworkState value={lesson.homework} onClick={lesson.homework ? () => sourceHomeworkCellClick(lesson) : undefined} /></td>
       <td className="bm-topic">{lesson.topic || '—'}</td>
-      <td className="bm-feedback">{lesson.feedbackAction ? <button className="bm-icon-button" aria-label={`Открыть отзыв для урока ${lesson.number}`} onClick={() => sourceCellClick(lesson.sourceRow, 7)}><MessageSquare size={16} /></button> : lesson.feedback || '—'}</td>
+      <td className="bm-feedback">{lesson.feedbackAction ? <button className="bm-icon-button" aria-label={`Открыть отзыв для урока ${lesson.number}`} onClick={() => sourceCellClick(lesson.sourceRow, FEEDBACK_CELL_INDEX)}><MessageSquare size={16} /></button> : lesson.feedback || '—'}</td>
       <td className="bm-expand-cell"><button className="bm-icon-button" aria-label={`${expanded ? 'Скрыть' : 'Показать'} детали урока ${lesson.number}`} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><ChevronDown size={16} /></button></td>
     </tr>
     {expanded && !empty && <tr className="bm-lesson-details"><td colSpan={11}>
       <div><strong>Преподаватель</strong><span>{lesson.teacher || '—'}</span></div>
       <div><strong>Кабинет</strong><span>{lesson.room || '—'}</span></div>
       <div><strong>Тема</strong><span>{lesson.topic || '—'}</span></div>
-      <div><strong>Отзыв</strong><span>{lesson.feedbackAction ? <button className="bm-inline-link" onClick={() => sourceCellClick(lesson.sourceRow, 7)}>Открыть отзыв</button> : lesson.feedback || '—'}</span></div>
+      <div><strong>Отзыв</strong><span>{lesson.feedbackAction ? <button className="bm-inline-link" onClick={() => sourceCellClick(lesson.sourceRow, FEEDBACK_CELL_INDEX)}>Открыть отзыв</button> : lesson.feedback || '—'}</span></div>
     </td></tr>}
   </>;
 }
@@ -141,9 +145,9 @@ function MobileLesson({ lesson }: { lesson: Lesson }) {
   return <article className="bm-mobile-lesson">
     <div className="bm-mobile-lesson-head"><span className="bm-mobile-time">{lesson.time}</span><span className="bm-mobile-number">{lesson.number}</span></div>
     <div className="bm-mobile-lesson-main"><strong>{lesson.subject}</strong><span>{lesson.room}</span></div>
-    <div className="bm-mobile-status"><GradeChip value={lesson.grade} onClick={lesson.grade ? () => sourceCellClick(lesson.sourceRow, 3) : undefined} /><AttendanceState value={lesson.attendance} /><HomeworkState value={lesson.homework} onClick={lesson.homework ? () => sourceHomeworkCellClick(lesson) : undefined} /></div>
+    <div className="bm-mobile-status"><GradeChip value={lesson.grade} onClick={lesson.grade ? () => sourceCellClick(lesson.sourceRow, GRADE_CELL_INDEX) : undefined} /><AttendanceState value={lesson.attendance} /><HomeworkState value={lesson.homework} onClick={lesson.homework ? () => sourceHomeworkCellClick(lesson) : undefined} /></div>
     {(lesson.teacher || lesson.topic || lesson.feedback) && <button className="bm-details-toggle" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>Подробности <ChevronDown size={15} /></button>}
-    {expanded && <div className="bm-mobile-detail"><div><b>Преподаватель</b><span>{lesson.teacher || '—'}</span></div><div><b>Тема</b><span>{lesson.topic || '—'}</span></div><div><b>Отзыв</b><span>{lesson.feedbackAction ? <button className="bm-inline-link" onClick={() => sourceCellClick(lesson.sourceRow, 7)}>Открыть отзыв</button> : lesson.feedback || '—'}</span></div></div>}
+    {expanded && <div className="bm-mobile-detail"><div><b>Преподаватель</b><span>{lesson.teacher || '—'}</span></div><div><b>Тема</b><span>{lesson.topic || '—'}</span></div><div><b>Отзыв</b><span>{lesson.feedbackAction ? <button className="bm-inline-link" onClick={() => sourceCellClick(lesson.sourceRow, FEEDBACK_CELL_INDEX)}>Открыть отзыв</button> : lesson.feedback || '—'}</span></div></div>}
   </article>;
 }
 
@@ -186,8 +190,8 @@ function GradeControls({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapte
   const [end, setEnd] = useState(filters.endDate?.value ?? '');
   useEffect(() => { setStart(filters.startDate?.value ?? ''); setEnd(filters.endDate?.value ?? ''); }, [filters.startDate?.value, filters.endDate?.value]);
   return <><div className="bm-grades-controls"><div className="bm-grades-period">
-    {filters.startDate && <label><span>С</span><input aria-label="Дата начала" inputMode="numeric" value={start} onChange={event => { setStart(event.target.value); setOriginalDate(filters.startDate, event.target.value); }} /></label>}
-    {filters.endDate && <label><span>По</span><input aria-label="Дата окончания" inputMode="numeric" value={end} onChange={event => { setEnd(event.target.value); setOriginalDate(filters.endDate, event.target.value); }} /></label>}
+    {filters.startDate && <label><span>С</span><input type="text" aria-label="Дата начала" inputMode="numeric" placeholder="ДД.ММ.ГГГГ" autoComplete="off" value={start} onChange={event => { setStart(event.target.value); setOriginalDate(filters.startDate, event.target.value); }} /></label>}
+    {filters.endDate && <label><span>По</span><input type="text" aria-label="Дата окончания" inputMode="numeric" placeholder="ДД.ММ.ГГГГ" autoComplete="off" value={end} onChange={event => { setEnd(event.target.value); setOriginalDate(filters.endDate, event.target.value); }} /></label>}
     {filters.apply && <button className="bm-button bm-button-primary" onClick={() => filters.apply?.click()}>Применить</button>}
     </div><div className="bm-quick-filters">{filters.quick.map(control => <button key={control.label} className={control.active ? 'bm-filter-active' : ''} onClick={() => control.element.click()}>{control.label}</button>)}</div>
     <PageActions snapshot={snapshot} adapter={adapter} /></div>
@@ -211,10 +215,12 @@ function HomePage({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: My
   const [schedule, setSchedule] = useState<DiaryDay[]>([]);
   useEffect(() => { let active = true; adapter.getSchedule().then(days => { if (active) setSchedule(days); }).catch(() => { if (active) setSchedule([]); }); return () => { active = false; }; }, [adapter]);
   const groups = [...new Set(snapshot.activity.map(item => item.group))];
+  // Capture "now" once per schedule. Reading the clock inside render makes output depend on render time.
+  const now = useMemo(() => new Date(), [schedule]);
   const upcoming = schedule.flatMap(day => day.lessons.filter(lesson => lesson.subject).map(lesson => ({ day: day.date, lesson }))).filter(({ day, lesson }) => {
     const date = day.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
     const time = lesson.time.match(/^(\d{2}):(\d{2})/);
-    return date && time && new Date(Number(date[3]), Number(date[2]) - 1, Number(date[1]), Number(time[1]), Number(time[2])) >= new Date();
+    return date && time && new Date(Number(date[3]), Number(date[2]) - 1, Number(date[1]), Number(time[1]), Number(time[2])) >= now;
   }).slice(0, 4);
   const homework = schedule.flatMap(day => day.lessons.filter(lesson => lesson.subject && lesson.homework).map(lesson => ({ day: day.date, lesson }))).slice(0, 3);
   return <div className={`bm-home-layout ${upcoming.length || homework.length ? 'bm-home-three' : ''}`}><aside className="bm-home-side">
@@ -252,12 +258,13 @@ function SourcePanel({ snapshot }: { snapshot: MykoobSnapshot }) {
 
 function Header({ snapshot, nav, onMenu }: { snapshot: MykoobSnapshot; nav: NavigationItem[]; onMenu: () => void }) {
   const notifications = nav.find(item => item.page === 'notifications');
-  const messages = [...snapshot.original.querySelectorAll<HTMLElement>('a,button,[role="button"]')].find(element => /сообщ|messages|ziņoj|mail|inbox|✉/i.test([element.textContent, element.getAttribute('title'), element.getAttribute('aria-label'), element.getAttribute('href')].join(' ')));
-  const profileControl = [...snapshot.original.querySelectorAll<HTMLElement>('a,button,[role="button"],div')].find(element => {
+  // The original Mykoob DOM is large. Query it once per snapshot instead of on every render.
+  const messages = useMemo(() => [...snapshot.original.querySelectorAll<HTMLElement>('a,button,[role="button"]')].find(element => /сообщ|messages|ziņoj|mail|inbox|✉/i.test([element.textContent, element.getAttribute('title'), element.getAttribute('aria-label'), element.getAttribute('href')].join(' '))), [snapshot.original]);
+  const profileControl = useMemo(() => [...snapshot.original.querySelectorAll<HTMLElement>('a,button,[role="button"],div')].find(element => {
     const label = [element.getAttribute('title'), element.getAttribute('aria-label'), element.getAttribute('data-original-title'), element.children.length === 0 ? element.textContent : ''].join(' ');
     return /(^|\s)(профиль|profile|profils)(\s|$)/i.test(label) && label.length < 80;
-  });
-  const logout = [...snapshot.original.querySelectorAll<HTMLAnchorElement>('a')].find(link => /выход|logout|iziet/i.test(link.textContent || ''));
+  }), [snapshot.original]);
+  const logout = useMemo(() => [...snapshot.original.querySelectorAll<HTMLAnchorElement>('a')].find(link => /выход|logout|iziet/i.test(link.textContent || '')), [snapshot.original]);
   return <header className="bm-header"><div className="bm-header-inner">
     <button className="bm-icon-button bm-menu-button" aria-label="Открыть меню" onClick={onMenu}><Menu size={21} /></button>
     <a className="bm-brand" href={nav.find(item => item.page === 'home')?.href || fallbackNav[0].href}><span className="bm-brand-mark">m</span><span>mykoob<span className="bm-brand-plus">+</span></span></a>
