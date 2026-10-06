@@ -349,6 +349,50 @@ function AbsencesPage({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter
   </>;
 }
 
+function setOriginalSearch(input: HTMLInputElement | undefined, value: string) {
+  if (!input) return;
+  input.value = value;
+  // The notes list listens for keyup (debounced), not only input/change.
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+}
+
+function NotificationControls({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: MykoobAdapter }) {
+  const filters = snapshot.gradeFilters;
+  const [start, setStart] = useState(filters.startDate?.value ?? '');
+  const [end, setEnd] = useState(filters.endDate?.value ?? '');
+  const [query, setQuery] = useState(filters.search?.value ?? '');
+  useEffect(() => {
+    setStart(filters.startDate?.value ?? '');
+    setEnd(filters.endDate?.value ?? '');
+    setQuery(filters.search?.value ?? '');
+  }, [filters.startDate?.value, filters.endDate?.value, filters.search]);
+  const activeType = filters.searchTypes.find(control => control.active) ?? filters.searchTypes[0];
+  return <div className="bm-grades-controls"><div className="bm-grades-period">
+    {filters.startDate && <label><span>С</span><input type="text" aria-label="Дата начала" inputMode="numeric" placeholder="ДД.ММ.ГГГГ" autoComplete="off" value={start} onChange={event => { setStart(event.target.value); setOriginalDate(filters.startDate, event.target.value); }} /></label>}
+    {filters.endDate && <label><span>По</span><input type="text" aria-label="Дата окончания" inputMode="numeric" placeholder="ДД.ММ.ГГГГ" autoComplete="off" value={end} onChange={event => { setEnd(event.target.value); setOriginalDate(filters.endDate, event.target.value); }} /></label>}
+    {filters.apply && <button className="bm-button bm-button-primary" onClick={() => filters.apply?.click()}>Применить</button>}
+    </div>
+    {filters.search && <label className="bm-search-wrap"><span className="bm-sr-only">Поиск примечаний</span><input type="search" placeholder="Поиск примечаний" autoComplete="off" value={query} onChange={event => { setQuery(event.target.value); setOriginalSearch(filters.search, event.target.value); }} /></label>}
+    {filters.searchTypes.length > 0 && <label className="bm-select-wrap"><span className="bm-sr-only">Поле поиска</span>
+      <select value={activeType?.label ?? ''} onChange={event => filters.searchTypes.find(control => control.label === event.target.value)?.element.click()}>
+        {filters.searchTypes.map(control => <option key={control.label} value={control.label}>{control.label}</option>)}
+      </select><ChevronDown size={15} aria-hidden="true" />
+    </label>}
+    <PageActions snapshot={snapshot} adapter={adapter} /></div>;
+}
+
+function NotificationsPage({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: MykoobAdapter }) {
+  const data = snapshot.notifications;
+  if (!data) return <EmptyState title="Уведомления не найдены" text="Откройте исходную страницу, чтобы проверить данные." />;
+  return <><NotificationControls snapshot={snapshot} adapter={adapter} />
+    {data.empty || !data.table ? <EmptyState title="Примечаний за период нет" text="Не найдены примечания для данного периода." />
+    : <div className="bm-table-scroll"><table className="bm-data-table bm-notes-table"><thead><tr>{data.table.headings.map((heading, index) => <th scope="col" key={index}>{heading || `Колонка ${index + 1}`}</th>)}</tr></thead>
+      <tbody>{data.table.rows.map((cells, index) => <tr key={index}>{cells.map((cell, cellIndex) => <td key={cellIndex}>{cell || <span className="bm-dash">—</span>}</td>)}</tr>)}</tbody></table></div>}
+  </>;
+}
+
 function FrameCard({ frame, title }: { frame: HTMLIFrameElement; title: string }) {
   const ref = useRef<HTMLDivElement>(null);
   // Reparent the live iframe instead of creating a copy, so it keeps its state and loads once.
@@ -361,6 +405,7 @@ function PageBody({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: My
   if (snapshot.page === 'diary' && snapshot.diary.length) return <><DiaryPage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></>;
   if (snapshot.page === 'grades' && (snapshot.grades || snapshot.gradesEmpty)) return <><GradesPage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></>;
   if (snapshot.page === 'absences' && snapshot.absences) return <><AbsencesPage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></>;
+  if (snapshot.page === 'notifications' && snapshot.notifications) return <><NotificationsPage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></>;
   if (snapshot.page === 'statistics' && snapshot.embeddedFrame) return <><FrameCard frame={snapshot.embeddedFrame} title={snapshot.title} /><SourcePanel snapshot={snapshot} /></>;
   return <OriginalPage snapshot={snapshot} />;
 }

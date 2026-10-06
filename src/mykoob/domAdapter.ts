@@ -1,4 +1,4 @@
-import type { AbsenceEntry, AbsenceTable, Action, ActivityEntry, DiaryDay, GradeFilters, GradeTable, HomeResource, Lesson, MykoobAdapter, MykoobSnapshot, NavigationItem, Page, SourceSelect, UserContext } from './models';
+import type { AbsenceEntry, AbsenceTable, Action, ActivityEntry, DiaryDay, GradeFilters, GradeTable, HomeResource, Lesson, MykoobAdapter, MykoobSnapshot, NavigationItem, NotificationData, Page, SourceSelect, UserContext } from './models';
 
 const clean = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim();
 // Mykoob glues counters to labels without a space ("Задания38", "Файлы225").
@@ -311,11 +311,22 @@ function readGradeFilters(source: HTMLElement): GradeFilters {
   };
   const quick = ['Сегодня', 'Вчера', '1.sem.', '2.sem.'].map(make).filter((value): value is NonNullable<typeof value> => Boolean(value));
   const types = ['Все оценки', 'Diagnosticējošais darbs', 'Mājas darbs', 'Nodarbība', 'Patstāvīgais darbs', 'Pārbaudes darbs'].map(make).filter((value): value is NonNullable<typeof value> => Boolean(value));
-  return { startDate: dateInputs[0], endDate: dateInputs[1], apply: findTextControl('Утвердить'), quick, types };
+  const search = source.querySelector<HTMLInputElement>('#filter_search_value') ?? undefined;
+  return { startDate: dateInputs[0], endDate: dateInputs[1], apply: findTextControl('Утвердить'), quick, types, search, searchTypes: readSearchTypes(source) };
+}
+
+// Search-field selector on the notifications page (Все поля, Имя ученика, ...).
+// Clicking an <li> fires its inline setFilterType handler, even when the balloon is hidden.
+function readSearchTypes(source: HTMLElement): GradeFilters['searchTypes'] {
+  return [...source.querySelectorAll('.filter_list li')].map(element => ({
+    label: clean(element.textContent),
+    element: element as unknown as HTMLElement,
+    active: /sel2/.test(element.className),
+  })).filter(control => control.label);
 }
 
 function readActions(source: HTMLElement): Action[] {
-  const names = /печать|print|консультац|consult|экспорт|export|отчёт|report|период|семестр|semester/i;
+  const names = /печат|print|консультац|consult|экспорт|export|отчёт|report|период|семестр|semester/i;
   const actions: Action[] = [];
   source.querySelectorAll<HTMLElement>('button,a,[role="button"]').forEach(element => {
     const label = clean(element.textContent || element.getAttribute('title') || element.getAttribute('aria-label'));
@@ -344,7 +355,10 @@ function readSelects(source: HTMLElement): SourceSelect[] {
     if (isHiddenBelowSource(element)) return;
     const options = [...element.options].map(option => ({ label: clean(option.textContent), value: option.value }));
     if (options.length < 2) return;
-    const label = clean(element.getAttribute('aria-label') || element.previousElementSibling?.textContent) || `Выбор ${selects.length + 1}`;
+    // Class/subject dropdowns have no text label; their wrapper ids name them.
+    const contextId = element.closest('[id*="subject"]')?.id ?? element.closest('[id*="class"]')?.id ?? '';
+    const contextLabel = /subject/i.test(contextId) ? 'Предмет' : /class/i.test(contextId) ? 'Класс' : '';
+    const label = clean(element.getAttribute('aria-label') || element.previousElementSibling?.textContent) || contextLabel || `Выбор ${selects.length + 1}`;
     // Mykoob appends a fresh copy of print dialogs on every repeated click.
     // Show each unique form once instead of flooding the toolbar.
     const fingerprint = `${label}::${options.map(option => `${option.label}=${option.value}`).join('|')}`;
@@ -405,6 +419,29 @@ function readEmbeddedFrame(source: HTMLElement): HTMLIFrameElement | null {
   return source.querySelector<HTMLIFrameElement>('#main iframe[src*="analytics"]');
 }
 
+// Parser for the real notifications layout (#G_data_display): either an explicit
+// empty marker or a plain data table of unknown columns, rendered generically.
+function readNotifications(source: HTMLElement): NotificationData | null {
+  const display = source.querySelector('#G_data_display');
+  if (!display) return null;
+  if (display.querySelector('.empty-content') || /не найдены примечания/i.test(display.textContent ?? '')) {
+    return { empty: true, table: null };
+  }
+  const tables = [...display.querySelectorAll('table')].filter(table => !table.querySelector('table'));
+  const candidates = tables.map(table => ({
+    rows: [...table.querySelectorAll('tr')].filter(row => row.closest('table') === table),
+  })).filter(candidate => candidate.rows.length >= 2);
+  candidates.sort((a, b) => b.rows.length - a.rows.length);
+  const best = candidates[0];
+  if (!best) return null;
+  const cellText = (row: HTMLTableRowElement) =>
+    [...row.children].filter(cell => cell.tagName === 'TD' || cell.tagName === 'TH').map(cell => clean(cell.textContent));
+  const headings = cellText(best.rows[0]);
+  const rows = best.rows.slice(1).map(cellText).filter(cells => cells.some(Boolean));
+  if (!rows.length) return null;
+  return { empty: false, table: { headings, rows } };
+}
+
 export class DomMykoobAdapter implements MykoobAdapter {
   constructor(private source: HTMLElement) {}
 
@@ -423,12 +460,13 @@ export class DomMykoobAdapter implements MykoobAdapter {
     );
     return {
       page, title: pageNames[page], user: readUser(this.source), nav,
-      actions: page === 'diary' || page === 'grades' || page === 'absences' ? readActions(this.source) : [],
-      selects: page === 'diary' || page === 'grades' || page === 'absences' ? readSelects(this.source) : [],
+      actions: page === 'diary' || page === 'grades' || page === 'absences' || page === 'notifications' ? readActions(this.source) : [],
+      selects: page === 'diary' || page === 'grades' || page === 'absences' || page === 'notifications' ? readSelects(this.source) : [],
       diary: page === 'diary' ? readDiary(this.source) : [],
       grades, gradesEmpty,
       absences: page === 'absences' ? readAbsences(this.source) : null,
-      gradeFilters: page === 'grades' || page === 'absences' ? readGradeFilters(this.source) : { quick: [], types: [] },
+      notifications: page === 'notifications' ? readNotifications(this.source) : null,
+      gradeFilters: page === 'grades' || page === 'absences' || page === 'notifications' ? readGradeFilters(this.source) : { quick: [], types: [], searchTypes: [] },
       dateControl: page === 'diary' ? readDateControl(this.source) : null,
       activity: page === 'home' ? readActivity(this.source) : [],
       homeResources: page === 'home' ? readHomeResources(this.source) : [], profileImage: page === 'home' ? readProfileImage(this.source) : undefined,
