@@ -5,7 +5,7 @@ import {
   Search, UserRound, X, ClipboardList, Clock3, CircleCheck, CircleAlert, LogOut,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { DiaryDay, GradeRow, Lesson, MykoobAdapter, MykoobSnapshot, NavigationItem, Page, SourceSelect } from '../mykoob/models';
+import type { AbsenceEntry, DiaryDay, GradeRow, Lesson, MykoobAdapter, MykoobSnapshot, NavigationItem, Page, SourceSelect } from '../mykoob/models';
 
 const icons: Record<Page, LucideIcon> = {
   home: House, diary: CalendarDays, grades: BookOpen, absences: CircleAlert, homework: ClipboardList,
@@ -201,8 +201,12 @@ function GradeControls({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapte
 
 function GradesPage({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: MykoobAdapter }) {
   const table = snapshot.grades;
+  if (!table) {
+    // An explicitly empty period is real data: show filters plus a pure new empty state.
+    if (snapshot.gradesEmpty) return <><GradeControls snapshot={snapshot} adapter={adapter} /><EmptyState title="Оценок за период нет" text="В указанном периоде нет уроков с выставленными оценками." /></>;
+    return <EmptyState title="Таблица оценок не найдена" text="Откройте исходную страницу, чтобы проверить данные." />;
+  }
   const [subject, setSubject] = useState('all');
-  if (!table) return <EmptyState title="Таблица оценок не найдена" text="Откройте исходную страницу, чтобы проверить данные." />;
   return <><GradeControls snapshot={snapshot} adapter={adapter} />
     <div className="bm-table-scroll bm-grades-desktop"><table className="bm-data-table bm-grades-table"><thead><tr>{table.headings.map((heading, index) => <th scope="col" key={index}>{heading}</th>)}</tr></thead><tbody>{table.rows.map((row, index) => <GradeRowView key={index} row={row} headings={table.headings} />)}</tbody></table></div>
     <div className="bm-grades-mobile"><label className="bm-field-label" htmlFor="bm-subject">Предмет</label><select id="bm-subject" value={subject} onChange={event => setSubject(event.target.value)}><option value="all">Все предметы</option>{table.rows.map((row, index) => <option key={index} value={String(index)}>{row.subject}</option>)}</select>
@@ -320,12 +324,53 @@ function MainNavigation({ page, nav, drawer, onClose, onOpen }: { page: Page; na
   </>;
 }
 
+function AbsenceChip({ entry }: { entry: AbsenceEntry }) {
+  const Icon = entry.status === 'Посещено' || entry.status === 'Оправданный' ? CircleCheck
+    : entry.status === 'Непосещено' ? X
+    : entry.status === 'Несохранено' ? CircleHelp : Clock3;
+  const tone = entry.status === 'Посещено' || entry.status === 'Оправданный' ? 'success'
+    : entry.status === 'Непосещено' ? 'danger' : entry.status === 'Несохранено' ? 'neutral' : 'warning';
+  return <span className={`bm-grade bm-grade-${tone}`} title={entry.title || entry.status} aria-label={`${entry.status} ${entry.date}`.trim()}><Icon size={13} />{entry.date || entry.status}</span>;
+}
+
+const ABSENCE_SUMMARY_FALLBACK = ['Уроки', 'Отсутствует', 'Оправдано', 'Опоздания', 'Ушёл раньше'];
+
+function AbsencesPage({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: MykoobAdapter }) {
+  const table = snapshot.absences;
+  if (!table) return <EmptyState title="Данные о пропусках не найдены" text="Откройте исходную страницу, чтобы проверить данные." />;
+  const summaryHeadings = table.summaryHeadings.length ? table.summaryHeadings : ABSENCE_SUMMARY_FALLBACK;
+  return <><GradeControls snapshot={snapshot} adapter={adapter} />
+    <div className="bm-table-scroll"><table className="bm-data-table bm-absences-table"><thead><tr><th scope="col">Предмет</th>{table.months.map(month => <th scope="col" key={month}>{month}</th>)}{summaryHeadings.map(heading => <th scope="col" key={heading}>{heading}</th>)}</tr></thead>
+      <tbody>{table.rows.map((row, index) => <tr key={index}><th scope="row">{row.subject}</th>
+        {row.entries.map((entries, cellIndex) => <td key={cellIndex}>{entries.length ? <div className="bm-grade-cell">{entries.map((entry, entryIndex) => <AbsenceChip key={entryIndex} entry={entry} />)}</div> : <span className="bm-dash">—</span>}</td>)}
+        {row.summary.map((value, summaryIndex) => <td key={`sum-${summaryIndex}`} className="bm-num">{value || '—'}</td>)}
+      </tr>)}</tbody></table></div>
+    <p className="bm-help">Наведите курсор на отметку, чтобы увидеть дату и время.</p>
+  </>;
+}
+
+function FrameCard({ frame, title }: { frame: HTMLIFrameElement; title: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Reparent the live iframe instead of creating a copy, so it keeps its state and loads once.
+  useEffect(() => { if (ref.current && frame.parentElement !== ref.current) ref.current.appendChild(frame); }, [frame]);
+  return <section className="bm-original-card"><div className="bm-original-heading"><h2>{title}</h2><span>Данные Mykoob</span></div><div className="bm-frame-content" ref={ref} /></section>;
+}
+
+function PageBody({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: MykoobAdapter }) {
+  if (snapshot.page === 'home' && snapshot.activity.length) return <><HomePage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></>;
+  if (snapshot.page === 'diary' && snapshot.diary.length) return <><DiaryPage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></>;
+  if (snapshot.page === 'grades' && (snapshot.grades || snapshot.gradesEmpty)) return <><GradesPage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></>;
+  if (snapshot.page === 'absences' && snapshot.absences) return <><AbsencesPage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></>;
+  if (snapshot.page === 'statistics' && snapshot.embeddedFrame) return <><FrameCard frame={snapshot.embeddedFrame} title={snapshot.title} /><SourcePanel snapshot={snapshot} /></>;
+  return <OriginalPage snapshot={snapshot} />;
+}
+
 export function App({ snapshot, adapter }: { snapshot: MykoobSnapshot; adapter: MykoobAdapter }) {
   const [drawer, setDrawer] = useState(false);
   const nav = snapshot.nav;
   return <div className="bm-app"><Header snapshot={snapshot} nav={nav} onMenu={() => setDrawer(true)} /><MainNavigation page={snapshot.page} nav={nav} drawer={drawer} onClose={() => setDrawer(false)} onOpen={() => setDrawer(true)} />
     <main className="bm-main"><div className="bm-page-heading"><div><div className="bm-breadcrumb">Mykoob <ChevronRight size={14} /> {snapshot.title}</div><h1>{snapshot.title}</h1></div><span className="bm-student-label">{snapshot.user.label}</span></div>
-      {snapshot.page === 'home' && snapshot.activity.length ? <><HomePage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></> : snapshot.page === 'diary' && snapshot.diary.length ? <><DiaryPage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></> : snapshot.page === 'grades' && snapshot.grades ? <><GradesPage snapshot={snapshot} adapter={adapter} /><SourcePanel snapshot={snapshot} /></> : <OriginalPage snapshot={snapshot} />}
+      <PageBody snapshot={snapshot} adapter={adapter} />
     </main>
   </div>;
 }

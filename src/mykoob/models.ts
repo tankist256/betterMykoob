@@ -30,6 +30,9 @@ export interface Lesson {
 export interface DiaryDay { date: string; lessons: Lesson[]; }
 export interface GradeRow { subject: string; values: string[]; sourceCells: HTMLElement[]; }
 export interface GradeTable { headings: string[]; rows: GradeRow[]; }
+export interface AbsenceEntry { status: string; date: string; title: string; }
+export interface AbsenceRow { subject: string; entries: AbsenceEntry[][]; summary: string[]; }
+export interface AbsenceTable { months: string[]; summaryHeadings: string[]; rows: AbsenceRow[]; }
 export interface GradeFilterControl { label: string; element: HTMLElement; active: boolean; }
 export interface GradeFilters {
   startDate?: HTMLInputElement;
@@ -50,11 +53,14 @@ export interface MykoobSnapshot {
   selects: SourceSelect[];
   diary: DiaryDay[];
   grades: GradeTable | null;
+  gradesEmpty: boolean;
+  absences: AbsenceTable | null;
   gradeFilters: GradeFilters;
   dateControl: { label: string; previous?: HTMLElement; next?: HTMLElement } | null;
   activity: ActivityEntry[];
   homeResources: HomeResource[];
   profileImage?: string;
+  embeddedFrame: HTMLIFrameElement | null;
   original: HTMLElement;
 }
 
