@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" role="img" aria-labelledby="title desc">
+  <title id="title">Select the extracted BetterMykoob folder</title>
+  <desc id="desc">A file picker shows the extracted BetterMykoob folder containing manifest.json, content.js and content.css. Select that folder with Load unpacked.</desc>
+  <rect width="960" height="430" rx="16" fill="#f4f6f7" stroke="#d2dbe0"/>
+  <rect x="1" y="1" width="958" height="58" rx="15" fill="#e8edf0"/>
+  <text x="26" y="38" fill="#24323b" font-family="Arial,sans-serif" font-size="19" font-weight="600">Choose the extension folder</text>
+  <path d="M0 60h220v310H0Z" fill="#e9eef1"/>
+  <text x="28" y="107" fill="#566b77" font-family="Arial,sans-serif" font-size="15">Downloads</text>
+  <text x="28" y="147" fill="#566b77" font-family="Arial,sans-serif" font-size="15">Documents</text>
+  <text x="28" y="187" fill="#566b77" font-family="Arial,sans-serif" font-size="15">Desktop</text>
+  <text x="256" y="104" fill="#667985" font-family="Arial,sans-serif" font-size="15">Extracted release ZIP</text>
+  <rect x="246" y="121" width="681" height="53" rx="8" fill="#d7ecf5" stroke="#63aac9"/>
+  <path d="M263 137h16l4 5h15v22h-35Z" fill="#2189b5"/>
+  <text x="315" y="154" fill="#1b3541" font-family="Arial,sans-serif" font-size="18" font-weight="600">BetterMykoob</text>
+  <text x="256" y="215" fill="#667985" font-family="Arial,sans-serif" font-size="14">Inside the selected folder:</text>
+  <text x="280" y="250" fill="#263b46" font-family="Menlo,monospace" font-size="15">manifest.json</text>
+  <text x="280" y="278" fill="#263b46" font-family="Menlo,monospace" font-size="15">content.js</text>
+  <text x="280" y="306" fill="#263b46" font-family="Menlo,monospace" font-size="15">content.css</text>
+  <path d="M0 370h960" stroke="#d2dbe0"/>
+  <rect x="763" y="382" width="165" height="36" rx="8" fill="#137fa9"/>
+  <text x="788" y="405" fill="white" font-family="Arial,sans-serif" font-size="15" font-weight="600">Load unpacked</text>
+</svg>

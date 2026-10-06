@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 510" role="img" aria-labelledby="title desc">
+  <title id="title">Chrome Extensions installation controls</title>
+  <desc id="desc">Developer mode is enabled. The Load unpacked button and BetterMykoob extension are visible.</desc>
+  <rect width="960" height="510" rx="16" fill="#202124"/>
+  <path d="M16 0h928a16 16 0 0 1 16 16v62H0V16A16 16 0 0 1 16 0Z" fill="#303134"/>
+  <rect x="20" y="14" width="215" height="34" rx="10" fill="#202124"/>
+  <text x="39" y="37" fill="#e8eaed" font-family="Arial,sans-serif" font-size="15">Extensions</text>
+  <rect x="16" y="54" width="928" height="42" rx="20" fill="#45474a"/>
+  <text x="38" y="81" fill="#e8eaed" font-family="Arial,sans-serif" font-size="16">chrome://extensions</text>
+  <text x="30" y="146" fill="#e8eaed" font-family="Arial,sans-serif" font-size="27" font-weight="700">Extensions</text>
+  <rect x="260" y="114" width="370" height="46" rx="23" fill="#303134"/>
+  <text x="284" y="143" fill="#aeb3b7" font-family="Arial,sans-serif" font-size="16">Search extensions</text>
+  <text x="726" y="143" fill="#e8eaed" font-family="Arial,sans-serif" font-size="16">Developer mode</text>
+  <rect x="863" y="124" width="52" height="28" rx="14" fill="#8ab4f8"/>
+  <circle cx="899" cy="138" r="11" fill="#174ea6"/>
+  <rect x="28" y="184" width="168" height="46" rx="23" fill="none" stroke="#8ab4f8" stroke-width="2"/>
+  <text x="46" y="213" fill="#a9c7fa" font-family="Arial,sans-serif" font-size="16" font-weight="600">Load unpacked</text>
+  <rect x="212" y="184" width="152" height="46" rx="23" fill="none" stroke="#78909c"/>
+  <text x="230" y="213" fill="#c5c9ce" font-family="Arial,sans-serif" font-size="16">Pack extension</text>
+  <text x="28" y="286" fill="#e8eaed" font-family="Arial,sans-serif" font-size="20" font-weight="600">All extensions</text>
+  <rect x="28" y="308" width="495" height="170" rx="14" fill="#303134"/>
+  <rect x="52" y="333" width="54" height="54" rx="10" fill="#137fa9"/>
+  <text x="67" y="373" fill="white" font-family="Arial,sans-serif" font-size="37" font-weight="700">m</text>
+  <text x="128" y="351" fill="#e8eaed" font-family="Arial,sans-serif" font-size="19" font-weight="600">BetterMykoob</text>
+  <text x="128" y="376" fill="#bdc1c6" font-family="Arial,sans-serif" font-size="14">v0.1.0 · Chrome extension</text>
+  <rect x="51" y="419" width="100" height="38" rx="19" fill="none" stroke="#8ab4f8"/>
+  <text x="72" y="443" fill="#a9c7fa" font-family="Arial,sans-serif" font-size="15">Details</text>
+  <rect x="444" y="424" width="48" height="26" rx="13" fill="#8ab4f8"/>
+  <circle cx="479" cy="437" r="10" fill="#174ea6"/>
+  <rect x="856" y="163" width="72" height="4" rx="2" fill="#8ab4f8"/>
+  <rect x="31" y="237" width="165" height="4" rx="2" fill="#8ab4f8"/>
+</svg>
