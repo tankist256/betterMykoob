@@ -188,9 +188,15 @@ function readGradeValues(cell: HTMLElement): string {
 }
 
 function readGrades(source: HTMLElement): GradeTable | null {
-  const candidates = [...source.querySelectorAll<HTMLTableElement>('table')];
   const monthPattern = /сентябр|октябр|ноябр|декабр|январ|феврал|март|апрел|ма[йя]|июн|septembr|oktobr|novembr|decembr|janvār|februār|mart|aprīl|maij|jūnij/i;
-  const monthTable = candidates.find(candidate => !candidate.querySelector('table') && monthPattern.test(clean(candidate.querySelector('tr')?.textContent)) && [...candidate.querySelectorAll('tr')].length > 1);
+  const isMonthTable = (candidate: HTMLTableElement) => !candidate.querySelector('table') && monthPattern.test(clean(candidate.querySelector('tr')?.textContent)) && [...candidate.querySelectorAll('tr')].length > 1;
+  // Work-type tabs hide inactive panels with .hide instead of reordering the DOM.
+  const visibleFirst = (tables: HTMLTableElement[]) => [...tables].sort((a, b) => Number(Boolean(a.closest('.hide'))) - Number(Boolean(b.closest('.hide'))));
+  const scope = source.querySelector('#gradesContent');
+  const scoped = scope ? visibleFirst([...scope.querySelectorAll<HTMLTableElement>('table')]) : [];
+  const monthTable = scoped.find(isMonthTable)
+    // Fallback to the whole page for layouts without #gradesContent.
+    ?? visibleFirst([...source.querySelectorAll<HTMLTableElement>('table')]).find(isMonthTable);
   if (!monthTable) return readGradesContentFallback(source);
   const firstMonthRow = monthTable.querySelector('tr');
   const months = firstMonthRow ? [...firstMonthRow.children].map(cell => clean(cell.textContent)) : [];
@@ -306,8 +312,10 @@ function readGradeFilters(source: HTMLElement): GradeFilters {
   };
   const make = (label: string) => {
     const element = findTextControl(label);
-    // The selected period carries the `strong` class (e.g. "Сегодня" in .periodPart).
-    return element ? { label, element, active: /active|selected|current|\bstrong\b/i.test(`${element.className} ${element.parentElement?.className}`) || element.getAttribute('aria-selected') === 'true' } : null;
+    // The selected control is marked on itself, its parent, or the wrapping <li>
+    // (grade type tabs use li.active, the period uses .strong).
+    const context = `${element?.className} ${element?.parentElement?.className} ${element?.closest('li')?.className ?? ''}`;
+    return element ? { label, element, active: /active|selected|current|sel2|\bstrong\b/i.test(context) || element.getAttribute('aria-selected') === 'true' } : null;
   };
   const quick = ['Сегодня', 'Вчера', '1.sem.', '2.sem.'].map(make).filter((value): value is NonNullable<typeof value> => Boolean(value));
   const types = ['Все оценки', 'Diagnosticējošais darbs', 'Mājas darbs', 'Nodarbība', 'Patstāvīgais darbs', 'Pārbaudes darbs'].map(make).filter((value): value is NonNullable<typeof value> => Boolean(value));
